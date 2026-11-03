@@ -5,7 +5,7 @@ import WishForm from "./components/WishForm.jsx";
 import PersonCard from "./components/PersonCard.jsx";
 import PersonModal from "./components/PersonModal.jsx";
 import SetupNotice from "./components/SetupNotice.jsx";
-import AuthScreen from "./components/AuthScreen.jsx";
+import AuthModal from "./components/AuthModal.jsx";
 import ProfileModal from "./components/ProfileModal.jsx";
 
 const PRIORITY_ORDER = { "Top pick": 0, "Would love": 1, "Nice to have": 2 };
@@ -23,6 +23,7 @@ export default function App() {
   const [showProfile, setShowProfile] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedKey, setSelectedKey] = useState(null); // open person's wishlist
+  const [authPrompt, setAuthPrompt] = useState(null); // { intent: 'add' | 'claim', item? } | null
   const [toast, setToast] = useState("");
 
   const me = session?.user?.id || null;
@@ -42,21 +43,20 @@ export default function App() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  // ── Load + live-sync wishes (only once signed in) ───────────────────────────
+  // ── Load + live-sync wishes (PUBLIC — works signed in or out) ───────────────
   useEffect(() => {
-    if (!isConfigured || !session) return;
+    if (!isConfigured) return;
     let active = true;
     setLoading(true);
 
     (async () => {
-      const [wishesRes, claimsRes] = await Promise.all([
-        supabase.from(TABLE).select("*").order("created_at", { ascending: false }),
-        supabase.from("wish_claims").select("wish_id"), // RLS → only MY claims
-      ]);
+      const { data, error } = await supabase
+        .from(TABLE)
+        .select("*")
+        .order("created_at", { ascending: false });
       if (!active) return;
-      if (wishesRes.error) setError(wishesRes.error.message);
-      else setItems(wishesRes.data || []);
-      setMyClaims(new Set((claimsRes.data || []).map((c) => c.wish_id)));
+      if (error) setError(error.message);
+      else setItems(data || []);
       setLoading(false);
     })();
 
@@ -81,6 +81,22 @@ export default function App() {
       active = false;
       supabase.removeChannel(channel);
     };
+  }, []);
+
+  // ── My secret claims — loaded only when signed in ───────────────────────────
+  useEffect(() => {
+    if (!isConfigured || !session) {
+      setMyClaims(new Set());
+      return;
+    }
+    let active = true;
+    (async () => {
+      const { data } = await supabase.from("wish_claims").select("wish_id"); // RLS → only mine
+      if (active) setMyClaims(new Set((data || []).map((c) => c.wish_id)));
+    })();
+    return () => {
+      active = false;
+    };
   }, [session]);
 
   const flash = (msg) => {
@@ -88,6 +104,24 @@ export default function App() {
     window.clearTimeout(flash._t);
     flash._t = window.setTimeout(() => setToast(""), 2600);
   };
+
+  // Gate an action behind sign-in. Returns true if already signed in; otherwise
+  // opens the auth modal and remembers the intent to resume after login.
+  function requireAuth(prompt) {
+    if (session) return true;
+    setAuthPrompt(prompt);
+    return false;
+  }
+
+  // Resume the pending action once the visitor signs in.
+  useEffect(() => {
+    if (!session || !authPrompt) return;
+    const p = authPrompt;
+    setAuthPrompt(null);
+    if (p.intent === "add") setShowForm(true);
+    else if (p.intent === "claim" && p.item) toggleClaim(p.item);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, authPrompt]);
 
   // ── Actions ──────────────────────────────────────────────────────────────
   async function addWish(wish) {
@@ -122,6 +156,7 @@ export default function App() {
   }
 
   async function toggleClaim(item) {
+    if (!requireAuth({ intent: "claim", item })) return;
     const mineNow = myClaims.has(item.id);
     const setClaimed = (v) =>
       setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, is_claimed: v } : i)));
@@ -258,20 +293,26 @@ export default function App() {
       </div>
     );
 
-  if (!session) return <AuthScreen />;
-
-  // ── Signed-in app ──────────────────────────────────────────────────────────
+  // ── Public app (board visible to everyone; sign-in only to add/claim) ────────
   return (
     <div className="app">
       <Snow />
 
       <div className="topbar">
         <span className="topbar-brand">🎄 Wishlist</span>
-        <span className="topbar-user">
-          🎅 Hi, <b>{myName}</b>
-          <button className="btn btn-ghost btn-sm" onClick={() => setShowProfile(true)}>✏️ Edit name</button>
-          <button className="btn btn-ghost btn-sm" onClick={signOut}>Sign out</button>
-        </span>
+        {session ? (
+          <span className="topbar-user">
+            🎅 Hi, <b>{myName}</b>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowProfile(true)}>✏️ Edit name</button>
+            <button className="btn btn-ghost btn-sm" onClick={signOut}>Sign out</button>
+          </span>
+        ) : (
+          <span className="topbar-user">
+            <button className="btn btn-primary btn-sm" onClick={() => setAuthPrompt({ intent: "signin" })}>
+              🔑 Sign in
+            </button>
+          </span>
+        )}
       </div>
 
       <header className="hero">
@@ -291,12 +332,17 @@ export default function App() {
           <span className="stat"><b>{stats.claimed}</b> being gifted</span>
         </div>
 
-        <button className="btn btn-primary btn-big" onClick={() => setShowForm(true)}>
+        <button
+          className="btn btn-primary btn-big"
+          onClick={() => { if (requireAuth({ intent: "add" })) setShowForm(true); }}
+        >
           🎁 Add my wish
         </button>
 
         <p className="nudge">
-          {myWishCount === 0
+          {!session
+            ? "👀 Browsing as a guest — sign in to add your own wishes."
+            : myWishCount === 0
             ? "🎯 Add at least 3 wishes so Santa has options!"
             : myWishCount < 3
             ? `🎯 You've added ${myWishCount} ${myWishCount === 1 ? "wish" : "wishes"} — aim for at least 3!`
@@ -364,6 +410,18 @@ export default function App() {
           currentName={myName}
           onSave={saveProfileName}
           onClose={() => setShowProfile(false)}
+        />
+      )}
+      {authPrompt && (
+        <AuthModal
+          reason={
+            authPrompt.intent === "claim"
+              ? "Sign in to secretly gift this wish 🎁"
+              : authPrompt.intent === "add"
+              ? "Sign in to add your wish 🎄"
+              : ""
+          }
+          onClose={() => setAuthPrompt(null)}
         />
       )}
       {selectedGroup && (

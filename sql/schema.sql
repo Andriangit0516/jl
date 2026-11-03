@@ -17,8 +17,8 @@ drop policy if exists "profiles read"        on public.profiles;
 drop policy if exists "profiles insert self" on public.profiles;
 drop policy if exists "profiles update self" on public.profiles;
 
--- Signed-in users can see everyone's name (to label wishes) but only edit their own.
-create policy "profiles read"        on public.profiles for select using (auth.uid() is not null);
+-- Names are PUBLIC (they label wishes on the public board); you only edit your own.
+create policy "profiles read"        on public.profiles for select using (true);
 create policy "profiles insert self" on public.profiles for insert with check (id = auth.uid());
 create policy "profiles update self" on public.profiles for update using (id = auth.uid()) with check (id = auth.uid());
 
@@ -117,8 +117,9 @@ drop policy if exists "wishlist update own" on public.wishlist_items;
 drop policy if exists "wishlist delete"     on public.wishlist_items;
 drop policy if exists "wishlist delete own" on public.wishlist_items;
 
--- Everyone signed in can read all wishes; you can only add/edit/remove your own.
-create policy "wishlist read"       on public.wishlist_items for select using (auth.uid() is not null);
+-- Wishes are PUBLIC to read (no login to browse). Adding/editing/removing needs
+-- an account and is limited to your own wishes.
+create policy "wishlist read"       on public.wishlist_items for select using (true);
 create policy "wishlist insert own" on public.wishlist_items for insert with check (user_id = auth.uid());
 create policy "wishlist update own" on public.wishlist_items for update using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy "wishlist delete own" on public.wishlist_items for delete using (user_id = auth.uid());

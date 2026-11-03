@@ -242,7 +242,12 @@ body {
 .auth-submit { width: 100%; margin-top: 6px; }
 .auth-err { background: #fff0f0; border: 1px solid #f3c2c2; color: var(--red-dark); padding: 10px 14px; border-radius: 12px; font-size: 14px; }
 .auth-notice { background: #effaf0; border: 1px solid #bfe6c8; color: var(--green-dark); padding: 10px 14px; border-radius: 12px; font-size: 14px; }
-.auth-switch { margin: 16px 0 0; font-size: 14px; color: var(--ink-soft); }
+.auth-switch { margin: 16px 0 0; font-size: 14px; color: var(--ink-soft); text-align: center; }
+.auth-modal { text-align: center; }
+.auth-modal .form { text-align: left; }
+.auth-modal-title { margin: 6px 0 4px; }
+.auth-modal-sub { margin: 0 0 16px; }
+.auth-submit { width: 100%; margin-top: 4px; }
 .link-btn { background: none; border: none; color: var(--red); font-weight: 700; cursor: pointer; font-family: var(--font-body); font-size: 14px; }
 .link-btn:hover { text-decoration: underline; }
 

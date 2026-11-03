@@ -11,6 +11,8 @@ Built with **React + Vite** and **Supabase** (database + auth).
 
 ## Features
 
+- 🌍 **Public board** — anyone can browse the wishlists without signing in. An
+  account is required only to **add a wish** or **gift one**.
 - 🔐 **Accounts** — sign up with your name, email & password. Your name comes from
   your account, so **nobody can post fake wishes under someone else's name**, and
   you can only edit/remove **your own** wishes.
