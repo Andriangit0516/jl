@@ -5,6 +5,7 @@ import WishForm from "./components/WishForm.jsx";
 import WishCard from "./components/WishCard.jsx";
 import SetupNotice from "./components/SetupNotice.jsx";
 import AuthScreen from "./components/AuthScreen.jsx";
+import ProfileModal from "./components/ProfileModal.jsx";
 
 const PRIORITY_ORDER = { "Top pick": 0, "Would love": 1, "Nice to have": 2 };
 
@@ -17,6 +18,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null); // item being edited, or null
+  const [showProfile, setShowProfile] = useState(false);
   const [search, setSearch] = useState("");
   const [person, setPerson] = useState("Everyone");
   const [toast, setToast] = useState("");
@@ -132,6 +134,28 @@ export default function App() {
     setItems([]);
   }
 
+  // Edit the signed-in user's display name — syncs profile, account metadata,
+  // and the name on all their existing wishes. Returns { error? }.
+  async function saveProfileName(name) {
+    const { error: pErr } = await supabase
+      .from("profiles")
+      .upsert({ id: me, display_name: name });
+    if (pErr) return { error: pErr.message };
+
+    const { error: uErr } = await supabase.auth.updateUser({ data: { display_name: name } });
+    if (uErr) return { error: uErr.message };
+
+    const { error: wErr } = await supabase
+      .from(TABLE)
+      .update({ person_name: name })
+      .eq("user_id", me);
+    if (wErr) return { error: wErr.message };
+
+    setItems((prev) => prev.map((i) => (i.user_id === me ? { ...i, person_name: name } : i)));
+    flash("✨ Name updated!");
+    return {};
+  }
+
   // ── Derived view ───────────────────────────────────────────────────────────
   const people = useMemo(() => {
     const names = [...new Set(items.map((i) => i.person_name).filter(Boolean))];
@@ -199,6 +223,7 @@ export default function App() {
         <span className="topbar-brand">🎄 Wishlist</span>
         <span className="topbar-user">
           🎅 Hi, <b>{myName}</b>
+          <button className="btn btn-ghost btn-sm" onClick={() => setShowProfile(true)}>✏️ Edit name</button>
           <button className="btn btn-ghost btn-sm" onClick={signOut}>Sign out</button>
         </span>
       </div>
@@ -300,6 +325,13 @@ export default function App() {
           onSubmit={(patch) => updateWish(editing.id, patch)}
           onClose={() => setEditing(null)}
           authorName={myName}
+        />
+      )}
+      {showProfile && (
+        <ProfileModal
+          currentName={myName}
+          onSave={saveProfileName}
+          onClose={() => setShowProfile(false)}
         />
       )}
       {toast && <div className="toast">{toast}</div>}
