@@ -74,9 +74,26 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  nm text;
 begin
-  new.user_id     := auth.uid();
-  new.person_name := coalesce((select display_name from public.profiles where id = auth.uid()), 'Someone');
+  new.user_id := auth.uid();
+
+  -- Prefer the profile name; if the profile is missing (account predates the
+  -- profiles trigger), build it from the account and store it, so a real name
+  -- always shows instead of a placeholder.
+  select display_name into nm from public.profiles where id = auth.uid();
+  if nm is null then
+    select coalesce(nullif(trim(u.raw_user_meta_data->>'display_name'), ''), split_part(u.email, '@', 1))
+      into nm
+      from auth.users u where u.id = auth.uid();
+    if nm is not null then
+      insert into public.profiles (id, display_name) values (auth.uid(), nm)
+      on conflict (id) do nothing;
+    end if;
+  end if;
+
+  new.person_name := coalesce(nm, 'Someone');
   new.claimed_by  := null;   -- a wish can't be pre-claimed at creation
   return new;
 end;
@@ -135,7 +152,31 @@ $$;
 grant execute on function public.claim_wish(uuid, boolean) to authenticated;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 4) REALTIME — new/updated/removed wishes appear live for everyone.
+-- 4) BACKFILL — give every existing account + wish a name to show.
+--    Safe to run repeatedly. Fixes rows created before this schema existed.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- a) Ensure every account has a profile (name from signup metadata, else email).
+insert into public.profiles (id, display_name)
+select u.id,
+       coalesce(nullif(trim(u.raw_user_meta_data->>'display_name'), ''), split_part(u.email, '@', 1))
+from auth.users u
+on conflict (id) do nothing;
+
+-- b) Fill in any blank / placeholder wish names from the owner's profile.
+update public.wishlist_items w
+set person_name = p.display_name
+from public.profiles p
+where w.user_id = p.id
+  and (w.person_name is null or btrim(w.person_name) = '' or w.person_name = 'Someone');
+
+-- NOTE: wishes created under the very first (pre-accounts) schema may have a NULL
+-- user_id and can't be matched to an owner. Those are almost certainly old test
+-- rows — remove them with:
+--   delete from public.wishlist_items where user_id is null;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 5) REALTIME — new/updated/removed wishes appear live for everyone.
 -- ─────────────────────────────────────────────────────────────────────────────
 do $$
 begin
