@@ -28,12 +28,20 @@ export default function AuthScreen() {
           options: { data: { display_name: displayName } },
         });
         if (error) throw error;
-        // If email confirmation is on, there's no session yet.
+        // With email confirmation OFF, signUp returns a session → App logs in.
+        // If no session came back, try an immediate sign-in: it succeeds when
+        // confirmation is off, and only fails (needs email) when it's on.
         if (!data.session) {
-          setNotice("Account created! Check your email to confirm, then sign in. 📧");
-          setMode("signin");
+          const { error: siErr } = await supabase.auth.signInWithPassword({
+            email: email.trim(),
+            password,
+          });
+          if (siErr) {
+            setNotice("Account created! Check your email to confirm, then sign in. 📧");
+            setMode("signin");
+          }
+          // on success, onAuthStateChange in App takes over automatically.
         }
-        // Otherwise onAuthStateChange in App takes over automatically.
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email: email.trim(),
