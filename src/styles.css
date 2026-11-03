@@ -84,6 +84,7 @@ body {
 }
 .stats b { color: var(--ink); font-size: 16px; }
 .stats .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--gold); }
+.nudge { margin: 14px auto 0; font-size: 14px; font-weight: 500; color: var(--green-dark); }
 
 /* ── Buttons ──────────────────────────────────────────────────────────────── */
 .btn {

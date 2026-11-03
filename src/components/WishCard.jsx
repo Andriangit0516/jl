@@ -18,7 +18,7 @@ function hostOf(url) {
   }
 }
 
-export default function WishCard({ item, me, myName, onDelete, onToggleClaim }) {
+export default function WishCard({ item, me, myName, onEdit, onDelete, onToggleClaim }) {
   const pri = PRIORITY_META[item.priority] || PRIORITY_META["Would love"];
   const isMine = item.user_id && me && item.user_id === me;
   const claimedByMe = item.claimed_by && item.claimed_by === myName;
@@ -75,7 +75,10 @@ export default function WishCard({ item, me, myName, onDelete, onToggleClaim }) 
         )}
 
         {isMine && (
-          <button className="icon-btn" title="Remove your wish" onClick={onDelete}>🗑️</button>
+          <>
+            <button className="icon-btn" title="Edit your wish" onClick={onEdit}>✏️</button>
+            <button className="icon-btn" title="Remove your wish" onClick={onDelete}>🗑️</button>
+          </>
         )}
       </div>
     </article>

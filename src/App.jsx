@@ -16,6 +16,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null); // item being edited, or null
   const [search, setSearch] = useState("");
   const [person, setPerson] = useState("Everyone");
   const [toast, setToast] = useState("");
@@ -93,6 +94,15 @@ export default function App() {
     flash("🎄 Wish added to the tree!");
   }
 
+  async function updateWish(id, patch) {
+    // Only the owner's editable fields — user_id/person_name stay as-is (RLS enforces ownership).
+    const { data, error } = await supabase.from(TABLE).update(patch).eq("id", id).select().single();
+    if (error) return flash("😬 Couldn't update: " + error.message);
+    setItems((prev) => prev.map((i) => (i.id === id ? data : i)));
+    setEditing(null);
+    flash("✨ Wish updated!");
+  }
+
   async function removeWish(id) {
     if (!window.confirm("Remove this wish for good?")) return;
     const snapshot = items;
@@ -155,6 +165,11 @@ export default function App() {
     [items]
   );
 
+  const myWishCount = useMemo(
+    () => items.filter((i) => i.user_id && me && i.user_id === me).length,
+    [items, me]
+  );
+
   // ── Gates ────────────────────────────────────────────────────────────────
   if (!isConfigured)
     return (
@@ -208,6 +223,14 @@ export default function App() {
         <button className="btn btn-primary btn-big" onClick={() => setShowForm(true)}>
           🎁 Add my wish
         </button>
+
+        <p className="nudge">
+          {myWishCount === 0
+            ? "🎯 Add at least 3 wishes so Santa has options!"
+            : myWishCount < 3
+            ? `🎯 You've added ${myWishCount} ${myWishCount === 1 ? "wish" : "wishes"} — aim for at least 3!`
+            : `🌟 ${myWishCount} wishes added — you're all set! Add or edit anytime.`}
+        </p>
       </header>
 
       <main className="board">
@@ -255,6 +278,7 @@ export default function App() {
                 item={item}
                 me={me}
                 myName={myName}
+                onEdit={() => setEditing(item)}
                 onDelete={() => removeWish(item.id)}
                 onToggleClaim={() => toggleClaim(item)}
               />
@@ -267,7 +291,17 @@ export default function App() {
         Made with 🍪 &amp; ☕ for the office Christmas party · {new Date().getFullYear()}
       </footer>
 
-      {showForm && <WishForm onAdd={addWish} onClose={() => setShowForm(false)} authorName={myName} />}
+      {showForm && (
+        <WishForm onSubmit={addWish} onClose={() => setShowForm(false)} authorName={myName} />
+      )}
+      {editing && (
+        <WishForm
+          editing={editing}
+          onSubmit={(patch) => updateWish(editing.id, patch)}
+          onClose={() => setEditing(null)}
+          authorName={myName}
+        />
+      )}
       {toast && <div className="toast">{toast}</div>}
     </div>
   );

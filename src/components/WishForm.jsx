@@ -3,14 +3,15 @@ import { fileToCompressedDataURL, imageFromEvent } from "../lib/image.js";
 
 const PRIORITIES = ["Top pick", "Would love", "Nice to have"];
 
-export default function WishForm({ onAdd, onClose, authorName }) {
+export default function WishForm({ onSubmit, onClose, authorName, editing }) {
+  const isEdit = Boolean(editing);
   const [form, setForm] = useState({
-    title: "",
-    url: "",
-    details: "",
-    priority: "Would love",
+    title: editing?.title || "",
+    url: editing?.url || "",
+    details: editing?.details || "",
+    priority: editing?.priority || "Would love",
   });
-  const [image, setImage] = useState(null); // compressed data URL
+  const [image, setImage] = useState(editing?.image_url || null); // compressed data URL
   const [imgBusy, setImgBusy] = useState(false);
   const [imgErr, setImgErr] = useState("");
   const [dragOver, setDragOver] = useState(false);
@@ -45,7 +46,6 @@ export default function WishForm({ onAdd, onClose, authorName }) {
     setImgBusy(true);
     try {
       const dataUrl = await fileToCompressedDataURL(file);
-      // ~1.4x base64 overhead; keep rows sane.
       if (dataUrl.length > 2_000_000) {
         setImgErr("That image is a bit large even after shrinking — try a smaller crop.");
       } else {
@@ -80,7 +80,7 @@ export default function WishForm({ onAdd, onClose, authorName }) {
     if (url && !/^https?:\/\//i.test(url)) url = "https://" + url;
 
     setSaving(true);
-    await onAdd({
+    await onSubmit({
       title,
       url: url || null,
       details: form.details.trim() || null,
@@ -92,11 +92,13 @@ export default function WishForm({ onAdd, onClose, authorName }) {
 
   return (
     <div className="modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label="Add a wish">
+      <div className="modal" role="dialog" aria-modal="true" aria-label={isEdit ? "Edit wish" : "Add a wish"}>
         <div className="modal-ribbon" />
         <button className="modal-x" onClick={onClose} aria-label="Close">✕</button>
-        <h2 className="modal-title">🎁 Add your wish</h2>
-        <p className="modal-sub">Posting as <b>{authorName}</b> — add a photo so there's no mixup!</p>
+        <h2 className="modal-title">{isEdit ? "✏️ Edit your wish" : "🎁 Add your wish"}</h2>
+        <p className="modal-sub">
+          {isEdit ? "Update the details below." : <>Posting as <b>{authorName}</b> — add a photo so there's no mixup!</>}
+        </p>
 
         <form onSubmit={submit} className="form">
           <label className="field">
@@ -164,7 +166,7 @@ export default function WishForm({ onAdd, onClose, authorName }) {
           <div className="form-actions">
             <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn btn-primary" disabled={saving || imgBusy}>
-              {saving ? "Adding…" : "🎄 Add to the tree"}
+              {saving ? "Saving…" : isEdit ? "💾 Save changes" : "🎄 Add to the tree"}
             </button>
           </div>
         </form>
