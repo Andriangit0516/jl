@@ -271,6 +271,43 @@ body {
 /* ── Ownership bits ───────────────────────────────────────────────────────── */
 .you-tag { margin-left: 6px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #fff; background: var(--green); padding: 2px 7px; border-radius: 999px; vertical-align: middle; }
 .own-note { font-size: 13px; color: var(--ink-soft); font-style: italic; margin-right: auto; }
+.pri-right { margin-left: auto; }
+
+/* ── Person cards (one per person) ────────────────────────────────────────── */
+.person-card {
+  display: flex; flex-direction: column; gap: 14px; text-align: left; cursor: pointer;
+  background: var(--white); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 18px; box-shadow: var(--shadow); overflow: hidden; position: relative;
+  font-family: var(--font-body); animation: pop 0.35s ease backwards;
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+.person-card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 6px; background: repeating-linear-gradient(90deg, var(--red) 0 14px, var(--white) 14px 28px, var(--green) 28px 42px, var(--white) 42px 56px); }
+.person-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); border-color: var(--gold); }
+.person-top { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
+.avatar-lg { width: 50px; height: 50px; font-size: 18px; }
+.person-id { display: flex; flex-direction: column; line-height: 1.2; }
+.person-id strong { font-size: 18px; color: var(--ink); }
+.person-count { font-size: 13px; color: var(--ink-soft); font-weight: 500; }
+
+.person-thumbs { display: flex; gap: 6px; align-items: center; }
+.person-thumbs img { width: 60px; height: 60px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); background: #fff; }
+.person-more { font-size: 13px; font-weight: 700; color: var(--ink-soft); padding-left: 2px; }
+.person-titles { display: flex; flex-wrap: wrap; gap: 6px; }
+.title-chip { font-size: 12.5px; color: var(--ink); background: var(--cream-2); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.title-more { background: #fff; color: var(--ink-soft); }
+
+.person-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 12px; border-top: 1px dashed var(--line); }
+.open-hint { font-size: 13px; font-weight: 700; color: var(--red); }
+.person-card:hover .open-hint { text-decoration: underline; }
+.gift-count { font-size: 12.5px; color: var(--green-dark); font-weight: 600; }
+
+/* ── Person modal (their full wishlist) ───────────────────────────────────── */
+.modal-lg { width: 900px; max-width: 100%; }
+.person-modal-head { display: flex; align-items: center; gap: 14px; margin: 8px 0 18px; }
+.person-modal-name { margin: 0; font-size: 28px; }
+.person-modal-sub { margin: 0; }
+.person-modal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; }
+.person-modal-grid .card { animation: none; }
 
 @media (max-width: 520px) {
   .field-row { grid-template-columns: 1fr; }

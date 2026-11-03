@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase, isConfigured, TABLE } from "./supabaseClient";
 import Snow from "./components/Snow.jsx";
 import WishForm from "./components/WishForm.jsx";
-import WishCard from "./components/WishCard.jsx";
+import PersonCard from "./components/PersonCard.jsx";
+import PersonModal from "./components/PersonModal.jsx";
 import SetupNotice from "./components/SetupNotice.jsx";
 import AuthScreen from "./components/AuthScreen.jsx";
 import ProfileModal from "./components/ProfileModal.jsx";
@@ -20,7 +21,7 @@ export default function App() {
   const [editing, setEditing] = useState(null); // item being edited, or null
   const [showProfile, setShowProfile] = useState(false);
   const [search, setSearch] = useState("");
-  const [person, setPerson] = useState("Everyone");
+  const [selectedKey, setSelectedKey] = useState(null); // open person's wishlist
   const [toast, setToast] = useState("");
 
   const me = session?.user?.id || null;
@@ -156,29 +157,52 @@ export default function App() {
     return {};
   }
 
-  // ── Derived view ───────────────────────────────────────────────────────────
-  const people = useMemo(() => {
-    const names = [...new Set(items.map((i) => i.person_name).filter(Boolean))];
-    names.sort((a, b) => a.localeCompare(b));
-    return ["Everyone", ...names];
-  }, [items]);
+  // ── Derived view — one group per person ─────────────────────────────────────
+  const sortWishes = (ws) =>
+    [...ws].sort((a, b) => {
+      const p = (PRIORITY_ORDER[a.priority] ?? 1) - (PRIORITY_ORDER[b.priority] ?? 1);
+      if (p !== 0) return p;
+      return new Date(b.created_at) - new Date(a.created_at);
+    });
 
-  const visible = useMemo(() => {
+  const groups = useMemo(() => {
+    const map = new Map();
+    for (const it of items) {
+      const key = it.user_id || "name:" + (it.person_name || "");
+      if (!map.has(key))
+        map.set(key, { key, userId: it.user_id || null, name: it.person_name || "Someone", wishes: [] });
+      map.get(key).wishes.push(it);
+    }
+    const arr = [...map.values()].map((g) => ({
+      ...g,
+      wishes: sortWishes(g.wishes),
+      claimedCount: g.wishes.filter((w) => w.claimed_by).length,
+    }));
+    arr.sort((a, b) => {
+      if (a.userId === me && b.userId !== me) return -1;
+      if (b.userId === me && a.userId !== me) return 1;
+      return a.name.localeCompare(b.name);
+    });
+    return arr;
+  }, [items, me]);
+
+  const visibleGroups = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return items
-      .filter((i) => (person === "Everyone" ? true : i.person_name === person))
-      .filter((i) => {
-        if (!q) return true;
-        return [i.title, i.details, i.person_name]
-          .filter(Boolean)
-          .some((f) => f.toLowerCase().includes(q));
-      })
-      .sort((a, b) => {
-        const p = (PRIORITY_ORDER[a.priority] ?? 1) - (PRIORITY_ORDER[b.priority] ?? 1);
-        if (p !== 0) return p;
-        return new Date(b.created_at) - new Date(a.created_at);
-      });
-  }, [items, person, search]);
+    if (!q) return groups;
+    return groups.filter(
+      (g) =>
+        g.name.toLowerCase().includes(q) ||
+        g.wishes.some((w) =>
+          [w.title, w.details].filter(Boolean).some((f) => f.toLowerCase().includes(q))
+        )
+    );
+  }, [groups, search]);
+
+  // Keep the open person's wishlist live (reflects edits/claims/deletes).
+  const selectedGroup = useMemo(
+    () => groups.find((g) => g.key === selectedKey) || null,
+    [groups, selectedKey]
+  );
 
   const stats = useMemo(
     () => ({
@@ -263,28 +287,17 @@ export default function App() {
           <input
             className="search"
             type="search"
-            placeholder="🔍 Search wishes…"
+            placeholder="🔍 Search people or wishes…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <div className="people">
-            {people.map((p) => (
-              <button
-                key={p}
-                className={"chip" + (p === person ? " chip-active" : "")}
-                onClick={() => setPerson(p)}
-              >
-                {p === "Everyone" ? "✨ Everyone" : p}
-              </button>
-            ))}
-          </div>
         </div>
 
         {error && <div className="error-banner">⚠️ {error}</div>}
 
         {loading ? (
           <div className="empty">Loading the wishlist tree… 🎄</div>
-        ) : visible.length === 0 ? (
+        ) : visibleGroups.length === 0 ? (
           <div className="empty">
             {items.length === 0 ? (
               <>
@@ -292,20 +305,17 @@ export default function App() {
                 The tree is bare! Be the first to add a wish.
               </>
             ) : (
-              <>No wishes match your search. Try clearing the filters.</>
+              <>No one matches your search. Try clearing it.</>
             )}
           </div>
         ) : (
           <div className="grid">
-            {visible.map((item) => (
-              <WishCard
-                key={item.id}
-                item={item}
-                me={me}
-                myName={myName}
-                onEdit={() => setEditing(item)}
-                onDelete={() => removeWish(item.id)}
-                onToggleClaim={() => toggleClaim(item)}
+            {visibleGroups.map((g) => (
+              <PersonCard
+                key={g.key}
+                group={g}
+                isMe={g.userId === me}
+                onOpen={() => setSelectedKey(g.key)}
               />
             ))}
           </div>
@@ -332,6 +342,17 @@ export default function App() {
           currentName={myName}
           onSave={saveProfileName}
           onClose={() => setShowProfile(false)}
+        />
+      )}
+      {selectedGroup && (
+        <PersonModal
+          group={selectedGroup}
+          me={me}
+          myName={myName}
+          onEdit={(item) => setEditing(item)}
+          onDelete={(id) => removeWish(id)}
+          onToggleClaim={(item) => toggleClaim(item)}
+          onClose={() => setSelectedKey(null)}
         />
       )}
       {toast && <div className="toast">{toast}</div>}

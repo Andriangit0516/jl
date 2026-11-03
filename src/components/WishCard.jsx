@@ -18,7 +18,7 @@ function hostOf(url) {
   }
 }
 
-export default function WishCard({ item, me, myName, onEdit, onDelete, onToggleClaim }) {
+export default function WishCard({ item, me, myName, onEdit, onDelete, onToggleClaim, hideWho }) {
   const pri = PRIORITY_META[item.priority] || PRIORITY_META["Would love"];
   const isMine = item.user_id && me && item.user_id === me;
   const claimedByMe = item.claimed_by && item.claimed_by === myName;
@@ -26,12 +26,16 @@ export default function WishCard({ item, me, myName, onEdit, onDelete, onToggleC
   return (
     <article className={"card " + (item.claimed_by ? "card-claimed" : "")}>
       <div className="card-head">
-        <span className="avatar">{initials(item.person_name)}</span>
-        <div className="card-who">
-          <strong>{item.person_name}{isMine && <span className="you-tag">you</span>}</strong>
-          <span className="wants">wishes for…</span>
-        </div>
-        <span className={"pri " + pri.cls}>{pri.label}</span>
+        {!hideWho && (
+          <>
+            <span className="avatar">{initials(item.person_name)}</span>
+            <div className="card-who">
+              <strong>{item.person_name}{isMine && <span className="you-tag">you</span>}</strong>
+              <span className="wants">wishes for…</span>
+            </div>
+          </>
+        )}
+        <span className={"pri " + pri.cls + (hideWho ? " pri-right" : "")}>{pri.label}</span>
       </div>
 
       {item.image_url && (
