@@ -1,20 +1,22 @@
 import { useEffect, useRef, useState } from "react";
+import { fileToCompressedDataURL, imageFromEvent } from "../lib/image.js";
 
 const PRIORITIES = ["Top pick", "Would love", "Nice to have"];
 
-const LS_NAME = "cw_name"; // remember the person's name between visits
-
-export default function WishForm({ onAdd, onClose }) {
+export default function WishForm({ onAdd, onClose, authorName }) {
   const [form, setForm] = useState({
-    person_name: localStorage.getItem(LS_NAME) || "",
     title: "",
     url: "",
     details: "",
-    price: "",
     priority: "Would love",
   });
+  const [image, setImage] = useState(null); // compressed data URL
+  const [imgBusy, setImgBusy] = useState(false);
+  const [imgErr, setImgErr] = useState("");
+  const [dragOver, setDragOver] = useState(false);
   const [saving, setSaving] = useState(false);
   const firstField = useRef(null);
+  const fileInput = useRef(null);
 
   useEffect(() => {
     firstField.current?.focus();
@@ -23,26 +25,67 @@ export default function WishForm({ onAdd, onClose }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  // Paste a screenshot anywhere in the modal (Ctrl/Cmd+V).
+  useEffect(() => {
+    async function onPaste(e) {
+      const file = imageFromEvent(e);
+      if (file) {
+        e.preventDefault();
+        await loadImage(file);
+      }
+    }
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, []);
+
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  async function loadImage(file) {
+    setImgErr("");
+    setImgBusy(true);
+    try {
+      const dataUrl = await fileToCompressedDataURL(file);
+      // ~1.4x base64 overhead; keep rows sane.
+      if (dataUrl.length > 2_000_000) {
+        setImgErr("That image is a bit large even after shrinking — try a smaller crop.");
+      } else {
+        setImage(dataUrl);
+      }
+    } catch (err) {
+      setImgErr(err.message || "Couldn't process that image.");
+    } finally {
+      setImgBusy(false);
+    }
+  }
+
+  function onPick(e) {
+    const file = e.target.files?.[0];
+    if (file) loadImage(file);
+    e.target.value = ""; // allow re-picking the same file
+  }
+
+  function onDrop(e) {
+    e.preventDefault();
+    setDragOver(false);
+    const file = imageFromEvent(e);
+    if (file) loadImage(file);
+  }
 
   async function submit(e) {
     e.preventDefault();
-    const person_name = form.person_name.trim();
     const title = form.title.trim();
-    if (!person_name || !title) return;
+    if (!title) return;
 
     let url = form.url.trim();
     if (url && !/^https?:\/\//i.test(url)) url = "https://" + url;
 
     setSaving(true);
-    localStorage.setItem(LS_NAME, person_name);
     await onAdd({
-      person_name,
       title,
       url: url || null,
       details: form.details.trim() || null,
-      price: form.price.trim() || null,
       priority: form.priority,
+      image_url: image || null,
     });
     setSaving(false);
   }
@@ -53,20 +96,47 @@ export default function WishForm({ onAdd, onClose }) {
         <div className="modal-ribbon" />
         <button className="modal-x" onClick={onClose} aria-label="Close">✕</button>
         <h2 className="modal-title">🎁 Add your wish</h2>
-        <p className="modal-sub">Tell everyone what you'd love — the more detail, the better the gift!</p>
+        <p className="modal-sub">Posting as <b>{authorName}</b> — add a photo so there's no mixup!</p>
 
         <form onSubmit={submit} className="form">
           <label className="field">
-            <span>Your name <i>*</i></span>
-            <input ref={firstField} value={form.person_name} onChange={set("person_name")}
-              placeholder="e.g. Andrian" maxLength={60} required />
-          </label>
-
-          <label className="field">
             <span>What do you wish for? <i>*</i></span>
-            <input value={form.title} onChange={set("title")}
+            <input ref={firstField} value={form.title} onChange={set("title")}
               placeholder="e.g. Cozy wireless headphones" maxLength={120} required />
           </label>
+
+          {/* Photo / screenshot: click, drag-drop, or paste (Ctrl+V). */}
+          <div className="field">
+            <span>Photo or screenshot 📸</span>
+            {image ? (
+              <div className="img-preview">
+                <img src={image} alt="wish preview" />
+                <button type="button" className="img-remove" onClick={() => setImage(null)} title="Remove photo">✕</button>
+              </div>
+            ) : (
+              <div
+                className={"dropzone" + (dragOver ? " dropzone-over" : "")}
+                onClick={() => fileInput.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={onDrop}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && fileInput.current?.click()}
+              >
+                {imgBusy ? (
+                  <span>✨ Processing image…</span>
+                ) : (
+                  <>
+                    <span className="dz-emoji">🖼️</span>
+                    <span><b>Click to upload</b>, drag an image here,<br />or <b>paste a screenshot</b> (Ctrl / ⌘ + V)</span>
+                  </>
+                )}
+              </div>
+            )}
+            <input ref={fileInput} type="file" accept="image/*" hidden onChange={onPick} />
+            {imgErr && <small className="img-err">⚠️ {imgErr}</small>}
+          </div>
 
           <label className="field">
             <span>Link to it 🔗</span>
@@ -74,23 +144,16 @@ export default function WishForm({ onAdd, onClose }) {
               placeholder="Paste a shop link (Lazada, Shopee, Amazon…)" />
           </label>
 
-          <div className="field-row">
-            <label className="field">
-              <span>Rough price 💸</span>
-              <input value={form.price} onChange={set("price")}
-                placeholder="e.g. ~₱1,500 or any" maxLength={40} />
-            </label>
-            <label className="field">
-              <span>How much do you want it?</span>
-              <select value={form.priority} onChange={set("priority")}>
-                {PRIORITIES.map((p) => (
-                  <option key={p} value={p}>
-                    {p === "Top pick" ? "⭐ Top pick" : p === "Would love" ? "💚 Would love" : "🙂 Nice to have"}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <label className="field">
+            <span>How much do you want it?</span>
+            <select value={form.priority} onChange={set("priority")}>
+              {PRIORITIES.map((p) => (
+                <option key={p} value={p}>
+                  {p === "Top pick" ? "⭐ Top pick" : p === "Would love" ? "💚 Would love" : "🙂 Nice to have"}
+                </option>
+              ))}
+            </select>
+          </label>
 
           <label className="field">
             <span>Details (size, color, notes…)</span>
@@ -100,7 +163,7 @@ export default function WishForm({ onAdd, onClose }) {
 
           <div className="form-actions">
             <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={saving}>
+            <button type="submit" className="btn btn-primary" disabled={saving || imgBusy}>
               {saving ? "Adding…" : "🎄 Add to the tree"}
             </button>
           </div>

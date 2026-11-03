@@ -1,17 +1,21 @@
 # 🎁 Christmas Party Wishlist
 
-A festive little web app for the office Christmas party. Everyone posts what
-they'd love as a gift — with a **link**, a **rough price**, and **details** —
-and coworkers (or Secret Santa) can **claim** a wish so no gift gets bought
-twice. New wishes appear **live** for everyone.
+A festive little web app for the office Christmas party. Everyone **creates an
+account**, then posts what they'd love as a gift — with a **link**, a **photo or
+screenshot**, and **details** — and coworkers (or Secret Santa) can **claim** a
+wish so no gift gets bought twice. New wishes appear **live** for everyone.
 
-Built with **React + Vite** and a **Supabase** database.
+Built with **React + Vite** and **Supabase** (database + auth).
 
 ---
 
 ## Features
 
-- 📝 Post a wish: your name, the item, a shop link, rough price, priority, details.
+- 🔐 **Accounts** — sign up with your name, email & password. Your name comes from
+  your account, so **nobody can post fake wishes under someone else's name**, and
+  you can only edit/remove **your own** wishes.
+- 📝 Post a wish: the item, a shop link, a **photo/screenshot**, priority, details.
+- 📸 **Add a photo** by uploading, dragging in, or **pasting a screenshot** (Ctrl/⌘+V).
 - 🎄 Browse everyone's wishlist as festive cards; filter by person; search.
 - 🎅 **"I'll gift this"** — claim a wish so others know it's covered (with undo).
 - ⚡ **Realtime** — wishes pop in/update/vanish live during the party.
@@ -55,14 +59,26 @@ The anon/publishable key is safe in a frontend app. **Never** put the
 
 ---
 
-## Database
+## Database & accounts
 
-The full schema is in [`sql/schema.sql`](sql/schema.sql) — one table
-(`wishlist_items`), permissive Row-Level-Security policies suited to an
-internal trust-based party app, and realtime enabled.
+The full schema is in [`sql/schema.sql`](sql/schema.sql):
 
-> ⚠️ The RLS policies let anyone with the app read/add/claim/remove wishes.
-> That's intentional for an internal party. Tighten them before any public use.
+- **`profiles`** — one row per account (display name), auto-created on signup.
+- **`wishlist_items`** — each wish, bound to its owner via `user_id`.
+- **Row-Level Security** — everyone signed in can *read* all wishes; you can only
+  *add/edit/remove your own*. Owner + name are stamped **server-side** by a trigger,
+  so a user can't post under another person's name.
+- **`claim_wish()`** — lets any signed-in user claim/unclaim a wish (a gift pledge)
+  without being able to edit the wish itself.
+
+### Auth setup (one time, in Supabase)
+
+1. Run `sql/schema.sql` in the **SQL Editor**.
+2. **Authentication → Providers → Email** is on by default.
+   - For a smooth party sign-up, consider turning **"Confirm email" off**
+     (Authentication → Providers → Email) so people can sign in immediately.
+     If you leave it on, users must click the email link before their first sign-in
+     (the app shows a "check your email" message).
 
 ---
 

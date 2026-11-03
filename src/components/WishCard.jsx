@@ -1,5 +1,3 @@
-import { useState } from "react";
-
 const PRIORITY_META = {
   "Top pick": { cls: "pri-top", label: "⭐ Top pick" },
   "Would love": { cls: "pri-love", label: "💚 Would love" },
@@ -7,7 +5,9 @@ const PRIORITY_META = {
 };
 
 function initials(name = "") {
-  return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() || "").join("") || "🎄";
+  return (
+    name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() || "").join("") || "🎄"
+  );
 }
 
 function hostOf(url) {
@@ -18,69 +18,65 @@ function hostOf(url) {
   }
 }
 
-export default function WishCard({ item, onDelete, onToggleClaim }) {
-  const [claiming, setClaiming] = useState(false);
-  const [name, setName] = useState(localStorage.getItem("cw_name") || "");
+export default function WishCard({ item, me, myName, onDelete, onToggleClaim }) {
   const pri = PRIORITY_META[item.priority] || PRIORITY_META["Would love"];
-
-  function confirmClaim() {
-    const n = name.trim();
-    if (!n) return;
-    localStorage.setItem("cw_name", n);
-    onToggleClaim(n);
-    setClaiming(false);
-  }
+  const isMine = item.user_id && me && item.user_id === me;
+  const claimedByMe = item.claimed_by && item.claimed_by === myName;
 
   return (
     <article className={"card " + (item.claimed_by ? "card-claimed" : "")}>
       <div className="card-head">
         <span className="avatar">{initials(item.person_name)}</span>
         <div className="card-who">
-          <strong>{item.person_name}</strong>
+          <strong>{item.person_name}{isMine && <span className="you-tag">you</span>}</strong>
           <span className="wants">wishes for…</span>
         </div>
         <span className={"pri " + pri.cls}>{pri.label}</span>
       </div>
 
+      {item.image_url && (
+        <a
+          className="card-photo"
+          href={item.url || item.image_url}
+          target="_blank"
+          rel="noreferrer noopener"
+          title="View full size"
+        >
+          <img src={item.image_url} alt={item.title} loading="lazy" />
+        </a>
+      )}
+
       <h3 className="card-title">{item.title}</h3>
 
       {item.details && <p className="card-details">{item.details}</p>}
 
-      <div className="card-meta">
-        {item.price && <span className="price">💸 {item.price}</span>}
-        {item.url && (
+      {item.url && (
+        <div className="card-meta">
           <a className="link" href={item.url} target="_blank" rel="noreferrer noopener">
             🔗 {hostOf(item.url)} ↗
           </a>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="card-foot">
         {item.claimed_by ? (
           <div className="claimed-tag">
-            🎁 Being gifted by <b>{item.claimed_by}</b>
-            <button className="mini-link" onClick={() => onToggleClaim(null)}>undo</button>
+            🎁 Being gifted by <b>{claimedByMe ? "you" : item.claimed_by}</b>
+            {claimedByMe && (
+              <button className="mini-link" onClick={onToggleClaim}>undo</button>
+            )}
           </div>
-        ) : claiming ? (
-          <div className="claim-row">
-            <input
-              autoFocus
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && confirmClaim()}
-              placeholder="Your name"
-              maxLength={60}
-            />
-            <button className="btn btn-primary btn-sm" onClick={confirmClaim}>Claim 🎁</button>
-            <button className="btn btn-ghost btn-sm" onClick={() => setClaiming(false)}>✕</button>
-          </div>
+        ) : isMine ? (
+          <span className="own-note">🌟 This is your wish</span>
         ) : (
-          <button className="btn btn-green btn-sm" onClick={() => setClaiming(true)}>
+          <button className="btn btn-green btn-sm" onClick={onToggleClaim}>
             🎅 I'll gift this
           </button>
         )}
 
-        <button className="icon-btn" title="Remove wish" onClick={onDelete}>🗑️</button>
+        {isMine && (
+          <button className="icon-btn" title="Remove your wish" onClick={onDelete}>🗑️</button>
+        )}
       </div>
     </article>
   );
