@@ -58,14 +58,17 @@ create table if not exists public.wishlist_items (
   url         text,                          -- link to the product / reference
   details     text,                          -- size, color, notes, etc.
   priority    text not null default 'Would love',  -- Top pick | Would love | Nice to have
-  claimed_by  text,                          -- display name of whoever will gift it
+  is_claimed  boolean not null default false, -- reserved by a (hidden) gifter — NO identity here
   image_url   text                           -- optional photo/screenshot (data URL)
 );
 
 -- Keep older installs in sync (columns added/removed over time).
-alter table public.wishlist_items add column if not exists user_id   uuid references auth.users(id) on delete cascade;
-alter table public.wishlist_items add column if not exists image_url text;
+alter table public.wishlist_items add column if not exists user_id    uuid references auth.users(id) on delete cascade;
+alter table public.wishlist_items add column if not exists image_url  text;
+alter table public.wishlist_items add column if not exists is_claimed boolean not null default false;
 alter table public.wishlist_items drop column if exists price;
+-- Drop the old identity-revealing claim column (claims now live in wish_claims).
+alter table public.wishlist_items drop column if exists claimed_by;
 
 -- Owner + name are stamped server-side so nobody can post under another name.
 create or replace function public.wishlist_set_owner()
@@ -94,7 +97,7 @@ begin
   end if;
 
   new.person_name := coalesce(nm, 'Someone');
-  new.claimed_by  := null;   -- a wish can't be pre-claimed at creation
+  new.is_claimed  := false;  -- a wish can't be pre-claimed at creation
   return new;
 end;
 $$;
@@ -121,35 +124,56 @@ create policy "wishlist update own" on public.wishlist_items for update using (u
 create policy "wishlist delete own" on public.wishlist_items for delete using (user_id = auth.uid());
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 3) CLAIMING — anyone signed in can claim/unclaim a wish (that's a gift pledge,
---    not editing the wish). Done via a function so the owner-only UPDATE policy
---    above still protects the wish's actual contents.
+-- 3) CLAIMING — ANONYMOUS (Secret-Santa safe).
+--    A claim lives in its own table that ONLY the claimer can read, so nobody —
+--    not even the wisher — can see who is gifting a wish. The wish row carries
+--    just a non-identifying boolean (is_claimed) so two people don't buy the same
+--    gift. A security-definer trigger keeps that boolean in sync.
 -- ─────────────────────────────────────────────────────────────────────────────
-create or replace function public.claim_wish(p_id uuid, p_claim boolean)
-returns void
+create table if not exists public.wish_claims (
+  wish_id    uuid primary key references public.wishlist_items(id) on delete cascade,
+  claimer_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
+alter table public.wish_claims enable row level security;
+
+drop policy if exists "claims read own"   on public.wish_claims;
+drop policy if exists "claims insert own" on public.wish_claims;
+drop policy if exists "claims delete own" on public.wish_claims;
+
+-- You can only ever SEE / MAKE / REMOVE your own claim. Others' claims are invisible.
+create policy "claims read own"   on public.wish_claims for select using (claimer_id = auth.uid());
+create policy "claims insert own" on public.wish_claims for insert with check (claimer_id = auth.uid());
+create policy "claims delete own" on public.wish_claims for delete using (claimer_id = auth.uid());
+
+-- Mirror claim state onto the wish as a public, identity-free boolean.
+create or replace function public.sync_is_claimed()
+returns trigger
 language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  me text;
 begin
-  if auth.uid() is null then
-    raise exception 'Not authenticated';
-  end if;
-  select display_name into me from public.profiles where id = auth.uid();
-
-  if p_claim then
-    update public.wishlist_items set claimed_by = me
-      where id = p_id and claimed_by is null;               -- only if still free
+  if (tg_op = 'INSERT') then
+    update public.wishlist_items set is_claimed = true  where id = new.wish_id;
+    return new;
   else
-    update public.wishlist_items set claimed_by = null
-      where id = p_id and claimed_by = me;                  -- only the claimer can release
+    update public.wishlist_items set is_claimed = false where id = old.wish_id;
+    return old;
   end if;
 end;
 $$;
 
-grant execute on function public.claim_wish(uuid, boolean) to authenticated;
+drop trigger if exists wish_claims_sync_ins on public.wish_claims;
+drop trigger if exists wish_claims_sync_del on public.wish_claims;
+create trigger wish_claims_sync_ins after insert on public.wish_claims
+  for each row execute function public.sync_is_claimed();
+create trigger wish_claims_sync_del after delete on public.wish_claims
+  for each row execute function public.sync_is_claimed();
+
+-- Remove the old identity-revealing claim function if it exists.
+drop function if exists public.claim_wish(uuid, boolean);
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 4) BACKFILL — give every existing account + wish a name to show.

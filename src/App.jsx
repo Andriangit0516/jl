@@ -15,6 +15,7 @@ export default function App() {
   const [authReady, setAuthReady] = useState(!isConfigured);
 
   const [items, setItems] = useState([]);
+  const [myClaims, setMyClaims] = useState(() => new Set()); // wish_ids I'm secretly gifting
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -48,13 +49,14 @@ export default function App() {
     setLoading(true);
 
     (async () => {
-      const { data, error } = await supabase
-        .from(TABLE)
-        .select("*")
-        .order("created_at", { ascending: false });
+      const [wishesRes, claimsRes] = await Promise.all([
+        supabase.from(TABLE).select("*").order("created_at", { ascending: false }),
+        supabase.from("wish_claims").select("wish_id"), // RLS → only MY claims
+      ]);
       if (!active) return;
-      if (error) setError(error.message);
-      else setItems(data || []);
+      if (wishesRes.error) setError(wishesRes.error.message);
+      else setItems(wishesRes.data || []);
+      setMyClaims(new Set((claimsRes.data || []).map((c) => c.wish_id)));
       setLoading(false);
     })();
 
@@ -120,19 +122,39 @@ export default function App() {
   }
 
   async function toggleClaim(item) {
-    const claim = !item.claimed_by;
-    const { error } = await supabase.rpc("claim_wish", { p_id: item.id, p_claim: claim });
-    if (error) return flash("😬 " + error.message);
-    // Optimistic; realtime will confirm for everyone else.
-    setItems((prev) =>
-      prev.map((i) => (i.id === item.id ? { ...i, claimed_by: claim ? myName : null } : i))
-    );
-    flash(claim ? "🎁 You're on it! Thanks, Santa." : "↩️ Unclaimed.");
+    const mineNow = myClaims.has(item.id);
+    const setClaimed = (v) =>
+      setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, is_claimed: v } : i)));
+
+    if (mineNow) {
+      // Un-reserve — optimistic.
+      setMyClaims((prev) => { const n = new Set(prev); n.delete(item.id); return n; });
+      setClaimed(false);
+      const { error } = await supabase.from("wish_claims").delete().eq("wish_id", item.id);
+      if (error) {
+        setMyClaims((prev) => new Set(prev).add(item.id));
+        setClaimed(true);
+        flash("😬 " + error.message);
+      } else flash("↩️ Unclaimed.");
+    } else {
+      // Reserve it (secretly). The table's PK means only one gifter per wish.
+      const { error } = await supabase.from("wish_claims").insert({ wish_id: item.id });
+      if (error) {
+        if (error.code === "23505" || /duplicate|unique/i.test(error.message))
+          flash("🎁 Someone already reserved this one.");
+        else flash("😬 " + error.message);
+      } else {
+        setMyClaims((prev) => new Set(prev).add(item.id));
+        setClaimed(true);
+        flash("🎁 You're on it — it's a secret! 🤫");
+      }
+    }
   }
 
   async function signOut() {
     await supabase.auth.signOut();
     setItems([]);
+    setMyClaims(new Set());
   }
 
   // Edit the signed-in user's display name — syncs profile, account metadata,
@@ -176,7 +198,7 @@ export default function App() {
     const arr = [...map.values()].map((g) => ({
       ...g,
       wishes: sortWishes(g.wishes),
-      claimedCount: g.wishes.filter((w) => w.claimed_by).length,
+      claimedCount: g.wishes.filter((w) => w.is_claimed).length,
     }));
     arr.sort((a, b) => {
       if (a.userId === me && b.userId !== me) return -1;
@@ -208,7 +230,7 @@ export default function App() {
     () => ({
       wishes: items.length,
       dreamers: new Set(items.map((i) => i.person_name)).size,
-      claimed: items.filter((i) => i.claimed_by).length,
+      claimed: items.filter((i) => i.is_claimed).length,
     }),
     [items]
   );
@@ -348,7 +370,7 @@ export default function App() {
         <PersonModal
           group={selectedGroup}
           me={me}
-          myName={myName}
+          myClaims={myClaims}
           onEdit={(item) => setEditing(item)}
           onDelete={(id) => removeWish(id)}
           onToggleClaim={(item) => toggleClaim(item)}

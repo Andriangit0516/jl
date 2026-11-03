@@ -7,7 +7,7 @@ function initials(name = "") {
   );
 }
 
-export default function PersonModal({ group, me, myName, onEdit, onDelete, onToggleClaim, onClose }) {
+export default function PersonModal({ group, me, myClaims, onEdit, onDelete, onToggleClaim, onClose }) {
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -39,7 +39,7 @@ export default function PersonModal({ group, me, myName, onEdit, onDelete, onTog
               key={item.id}
               item={item}
               me={me}
-              myName={myName}
+              claimedByMe={myClaims?.has(item.id)}
               hideWho
               onEdit={() => onEdit(item)}
               onDelete={() => onDelete(item.id)}

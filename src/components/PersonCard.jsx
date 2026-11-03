@@ -37,7 +37,10 @@ export default function PersonCard({ group, isMe, onOpen }) {
 
       <div className="person-foot">
         <span className="open-hint">Open wishlist →</span>
-        {claimedCount > 0 && <span className="gift-count">🎅 {claimedCount} being gifted</span>}
+        {/* Reserved count is hidden on your own card to keep the surprise. */}
+        {!isMe && claimedCount > 0 && (
+          <span className="gift-count">🎅 {claimedCount} being gifted</span>
+        )}
       </div>
     </button>
   );

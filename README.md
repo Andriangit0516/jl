@@ -17,7 +17,10 @@ Built with **React + Vite** and **Supabase** (database + auth).
 - 📝 Post a wish: the item, a shop link, a **photo/screenshot**, priority, details.
 - 📸 **Add a photo** by uploading, dragging in, or **pasting a screenshot** (Ctrl/⌘+V).
 - 🎄 Browse everyone's wishlist as festive cards; filter by person; search.
-- 🎅 **"I'll gift this"** — claim a wish so others know it's covered (with undo).
+- 🎅 **"I'll gift this"** — reserve a wish **anonymously** (Secret-Santa safe).
+  Others just see it's reserved so no one double-buys; the gifter's identity is
+  never shown — not even to the wisher, who can't see which of their wishes are
+  taken. Claims are stored in a separate table only the claimer can read.
 - ⚡ **Realtime** — wishes pop in/update/vanish live during the party.
 - ❄️ Snow, Christmas colors, and a Google-font holiday headline.
 - 🔌 Runs even before Supabase is wired — shows a friendly setup screen.

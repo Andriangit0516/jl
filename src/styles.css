@@ -162,6 +162,7 @@ body {
 
 .card-foot { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 10px; border-top: 1px dashed var(--line); }
 .claimed-tag { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--green-dark); margin-right: auto; }
+.reserved-tag { font-size: 13px; color: var(--ink-soft); font-weight: 600; margin-right: auto; }
 .claim-row { display: flex; align-items: center; gap: 6px; flex: 1; }
 .claim-row input { flex: 1; min-width: 0; padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line); font-family: var(--font-body); font-size: 13px; }
 .claim-row input:focus { outline: 2px solid var(--gold); }

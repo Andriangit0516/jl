@@ -18,13 +18,15 @@ function hostOf(url) {
   }
 }
 
-export default function WishCard({ item, me, myName, onEdit, onDelete, onToggleClaim, hideWho }) {
+export default function WishCard({ item, me, onEdit, onDelete, onToggleClaim, hideWho, claimedByMe }) {
   const pri = PRIORITY_META[item.priority] || PRIORITY_META["Would love"];
   const isMine = item.user_id && me && item.user_id === me;
-  const claimedByMe = item.claimed_by && item.claimed_by === myName;
+  // The owner never sees reserved status (keeps the surprise); others see an
+  // anonymous "reserved" — the gifter's identity is never exposed.
+  const showClaimed = item.is_claimed && !isMine;
 
   return (
-    <article className={"card " + (item.claimed_by ? "card-claimed" : "")}>
+    <article className={"card " + (showClaimed ? "card-claimed" : "")}>
       <div className="card-head">
         {!hideWho && (
           <>
@@ -63,15 +65,15 @@ export default function WishCard({ item, me, myName, onEdit, onDelete, onToggleC
       )}
 
       <div className="card-foot">
-        {item.claimed_by ? (
-          <div className="claimed-tag">
-            🎁 Being gifted by <b>{claimedByMe ? "you" : item.claimed_by}</b>
-            {claimedByMe && (
-              <button className="mini-link" onClick={onToggleClaim}>undo</button>
-            )}
-          </div>
-        ) : isMine ? (
+        {isMine ? (
           <span className="own-note">🌟 This is your wish</span>
+        ) : claimedByMe ? (
+          <div className="claimed-tag">
+            🎁 You're secretly gifting this
+            <button className="mini-link" onClick={onToggleClaim}>undo</button>
+          </div>
+        ) : item.is_claimed ? (
+          <span className="reserved-tag">🔒 Reserved by someone</span>
         ) : (
           <button className="btn btn-green btn-sm" onClick={onToggleClaim}>
             🎅 I'll gift this
