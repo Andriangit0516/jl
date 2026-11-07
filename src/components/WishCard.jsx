@@ -1,3 +1,6 @@
+import { useState } from "react";
+import Lightbox from "./Lightbox.jsx";
+
 const PRIORITY_META = {
   "Top pick": { cls: "pri-top", label: "⭐ Top pick" },
   "Would love": { cls: "pri-love", label: "💚 Would love" },
@@ -24,6 +27,7 @@ export default function WishCard({ item, me, onEdit, onDelete, onToggleClaim, hi
   // The owner never sees reserved status (keeps the surprise); others see an
   // anonymous "reserved" — the gifter's identity is never exposed.
   const showClaimed = item.is_claimed && !isMine;
+  const [preview, setPreview] = useState(false);
 
   return (
     <article className={"card " + (showClaimed ? "card-claimed" : "")}>
@@ -41,15 +45,20 @@ export default function WishCard({ item, me, onEdit, onDelete, onToggleClaim, hi
       </div>
 
       {item.image_url && (
-        <a
+        <button
+          type="button"
           className="card-photo"
-          href={item.url || item.image_url}
-          target="_blank"
-          rel="noreferrer noopener"
           title="View full size"
+          aria-label={`Preview image of ${item.title}`}
+          onClick={() => setPreview(true)}
         >
           <img src={item.image_url} alt={item.title} loading="lazy" />
-        </a>
+          <span className="card-photo-zoom" aria-hidden="true">⤢</span>
+        </button>
+      )}
+
+      {preview && (
+        <Lightbox src={item.image_url} alt={item.title} onClose={() => setPreview(false)} />
       )}
 
       <h3 className="card-title">{item.title}</h3>
